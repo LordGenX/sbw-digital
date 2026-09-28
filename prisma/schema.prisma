@@ -1,8 +1,6 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -10,4 +8,315 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ===================== ENUMS =====================
+
+enum AdminRole {
+  ADMIN
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum AboutSection {
+  HISTORY
+  VISION_MISSION
+  PROFILE
+  ORGANIZATION
+  ACHIEVEMENT
+}
+
+enum MembershipSection {
+  WHY_JOIN
+  BENEFIT
+  REQUIREMENT
+  HOW_TO_REGISTER
+  FAQ
+}
+
+enum StatisticStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// ===================== ADMIN =====================
+
+model Admin {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String    @db.VarChar(100)
+  email        String    @unique @db.VarChar(150)
+  passwordHash String    @db.Text
+  role         AdminRole @default(ADMIN)
+  isActive     Boolean   @default(true)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  createdHeroSections HeroSection[] @relation("HeroCreatedBy")
+  updatedHeroSections HeroSection[] @relation("HeroUpdatedBy")
+
+  createdAboutContents AboutContent[] @relation("AboutCreatedBy")
+  updatedAboutContents AboutContent[] @relation("AboutUpdatedBy")
+
+  createdServices Service[] @relation("ServiceCreatedBy")
+  updatedServices Service[] @relation("ServiceUpdatedBy")
+
+  createdMembershipInfos MembershipInfo[] @relation("MembershipCreatedBy")
+  updatedMembershipInfos MembershipInfo[] @relation("MembershipUpdatedBy")
+
+  createdNews News[] @relation("NewsCreatedBy")
+  updatedNews News[] @relation("NewsUpdatedBy")
+
+  createdEvents Event[] @relation("EventCreatedBy")
+  updatedEvents Event[] @relation("EventUpdatedBy")
+
+  createdStatistics Statistic[] @relation("StatisticCreatedBy")
+  updatedStatistics Statistic[] @relation("StatisticUpdatedBy")
+
+  createdContactInfos ContactInfo[] @relation("ContactCreatedBy")
+  updatedContactInfos ContactInfo[] @relation("ContactUpdatedBy")
+
+  createdSiteSettings SiteSettings[] @relation("SiteSettingsCreatedBy")
+  updatedSiteSettings SiteSettings[] @relation("SiteSettingsUpdatedBy")
+}
+
+// ===================== HERO SECTION =====================
+
+model HeroSection {
+  id          String  @id @default(uuid()) @db.Uuid
+  title       String  @db.VarChar(200)
+  description String  @db.Text
+  videoUrl    String  @db.Text
+  videoId     String  @db.VarChar(50)
+  ctaText     String? @db.VarChar(100)
+  ctaUrl      String? @db.VarChar(255)
+  isActive    Boolean @default(true)
+
+  createdById String @db.Uuid
+  updatedById String @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  createdBy Admin @relation("HeroCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  updatedBy Admin @relation("HeroUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([isActive])
+}
+
+// ===================== ABOUT CONTENT =====================
+
+model AboutContent {
+  id        String        @id @default(uuid()) @db.Uuid
+  section   AboutSection
+  title     String        @db.VarChar(200)
+  content   String        @db.Text
+  mediaId   String?       @db.Uuid
+  status    ContentStatus @default(DRAFT)
+  sortOrder Int           @default(0)
+
+  createdById String @db.Uuid
+  updatedById String @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  media     Media? @relation(fields: [mediaId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdBy Admin  @relation("AboutCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  updatedBy Admin  @relation("AboutUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([section, status, sortOrder])
+}
+
+// ===================== SERVICE =====================
+
+model Service {
+  id               String        @id @default(uuid()) @db.Uuid
+  name             String        @db.VarChar(150)
+  slug             String        @unique @db.VarChar(180)
+  shortDescription String        @db.Text
+  description      String        @db.Text
+  mediaId          String?       @db.Uuid
+  status           ContentStatus @default(DRAFT)
+  sortOrder        Int           @default(0)
+  metaTitle        String?       @db.VarChar(200)
+  metaDescription  String?       @db.Text
+
+  createdById String @db.Uuid
+  updatedById String @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  media     Media? @relation(fields: [mediaId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdBy Admin  @relation("ServiceCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  updatedBy Admin  @relation("ServiceUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([status, sortOrder])
+}
+
+// ===================== MEMBERSHIP INFO =====================
+
+model MembershipInfo {
+  id        String            @id @default(uuid()) @db.Uuid
+  section   MembershipSection
+  title     String            @db.VarChar(200)
+  content   String            @db.Text
+  mediaId   String?           @db.Uuid
+  status    ContentStatus     @default(DRAFT)
+  sortOrder Int               @default(0)
+
+  createdById String @db.Uuid
+  updatedById String @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  media     Media? @relation(fields: [mediaId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdBy Admin  @relation("MembershipCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  updatedBy Admin  @relation("MembershipUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([section, status, sortOrder])
+}
+
+// ===================== NEWS =====================
+
+model News {
+  id              String        @id @default(uuid()) @db.Uuid
+  title           String        @db.VarChar(200)
+  slug            String        @unique @db.VarChar(220)
+  excerpt         String?       @db.Text
+  content         String        @db.Text
+  publishedAt     DateTime?     @db.Timestamptz(6)
+  category        String?       @db.VarChar(100)
+  mediaId         String?       @db.Uuid
+  status          ContentStatus @default(DRAFT)
+  metaTitle       String?       @db.VarChar(200)
+  metaDescription String?       @db.Text
+
+  createdById String @db.Uuid
+  updatedById String @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  media     Media? @relation(fields: [mediaId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdBy Admin  @relation("NewsCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  updatedBy Admin  @relation("NewsUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([status, publishedAt])
+}
+
+// ===================== EVENT =====================
+
+model Event {
+  id          String        @id @default(uuid()) @db.Uuid
+  title       String        @db.VarChar(200)
+  slug        String        @unique @db.VarChar(220)
+  description String        @db.Text
+  location    String?       @db.VarChar(255)
+  startAt     DateTime      @db.Timestamptz(6)
+  endAt       DateTime?     @db.Timestamptz(6)
+  mediaId     String?       @db.Uuid
+  status      ContentStatus @default(DRAFT)
+
+  createdById String @db.Uuid
+  updatedById String @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  media     Media? @relation(fields: [mediaId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  createdBy Admin  @relation("EventCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  updatedBy Admin  @relation("EventUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([status, startAt])
+}
+
+// ===================== MEDIA =====================
+
+model Media {
+  id         String  @id @default(uuid()) @db.Uuid
+  fileName   String  @db.VarChar(255)
+  fileUrl    String  @db.Text
+  storageKey String  @unique @db.Text
+  mimeType   String  @db.VarChar(100)
+  fileSize   BigInt
+  altText    String? @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  aboutContents   AboutContent[]
+  services        Service[]
+  membershipInfos MembershipInfo[]
+  news            News[]
+  events          Event[]
+}
+
+// ===================== STATISTIC =====================
+
+model Statistic {
+  id          String          @id @default(uuid()) @db.Uuid
+  name        String          @db.VarChar(100)
+  value       Decimal         @db.Decimal(15, 2)
+  unit        String?         @db.VarChar(50)
+  description String?         @db.Text
+  sortOrder   Int             @default(0)
+  status      StatisticStatus @default(ACTIVE)
+
+  createdById String @db.Uuid
+  updatedById String @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  createdBy Admin @relation("StatisticCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  updatedBy Admin @relation("StatisticUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([status, sortOrder])
+}
+
+// ===================== CONTACT INFO =====================
+
+model ContactInfo {
+  id          String   @id @default(uuid()) @db.Uuid
+  address     String   @db.Text
+  phone       String?  @db.VarChar(50)
+  email       String?  @db.VarChar(150)
+  whatsapp    String?  @db.VarChar(50)
+  socialLinks Json?
+  latitude    Decimal? @db.Decimal(10, 7)
+  longitude   Decimal? @db.Decimal(10, 7)
+  mapUrl      String?  @db.Text
+
+  createdById String @db.Uuid
+  updatedById String @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  createdBy Admin @relation("ContactCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  updatedBy Admin @relation("ContactUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+}
+
+// ===================== SITE SETTINGS =====================
+
+model SiteSettings {
+  id              String  @id @default(uuid()) @db.Uuid
+  siteName        String  @db.VarChar(150)
+  siteDescription String? @db.Text
+
+  createdById String @db.Uuid
+  updatedById String @db.Uuid
+
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
+
+  createdBy Admin @relation("SiteSettingsCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  updatedBy Admin @relation("SiteSettingsUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
 }
