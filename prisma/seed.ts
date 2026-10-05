@@ -68,7 +68,7 @@ async function main() {
       content:
         "Visi dan misi Koperasi Konsumen Setia Budi Wanita Malang menjadi landasan dalam menjalankan organisasi dan memberikan manfaat bagi anggota serta masyarakat.",
       status: "PUBLISHED" as const,
-      sortOrder: 2,
+      sortOrder: 1,
     },
     {
       id: "33333333-3333-4333-8333-333333333333",
@@ -77,7 +77,7 @@ async function main() {
       content:
         "Koperasi Konsumen Setia Budi Wanita Malang merupakan organisasi koperasi yang berkomitmen untuk memberikan manfaat dan mengembangkan kemandirian anggota.",
       status: "PUBLISHED" as const,
-      sortOrder: 3,
+      sortOrder: 1,
     },
     {
       id: "44444444-4444-4444-8444-444444444444",
@@ -86,7 +86,7 @@ async function main() {
       content:
         "Struktur organisasi SBW menggambarkan susunan kepengurusan dan pembagian tanggung jawab dalam menjalankan organisasi koperasi.",
       status: "PUBLISHED" as const,
-      sortOrder: 4,
+      sortOrder: 1,
     },
     {
       id: "55555555-5555-4555-8555-555555555555",
@@ -95,7 +95,7 @@ async function main() {
       content:
         "SBW memiliki berbagai pencapaian dan kontribusi yang menjadi bagian dari perjalanan serta perkembangan organisasi.",
       status: "PUBLISHED" as const,
-      sortOrder: 5,
+      sortOrder: 1,
     },
   ];
 
@@ -127,6 +127,89 @@ async function main() {
 
     console.log(
       `AboutContent berhasil disiapkan: ${result.section}`,
+    );
+  }
+
+  // =========================================================
+  // MEMBERSHIP INFO
+  // =========================================================
+  
+  const membershipInfos = [
+    {
+      id: "71111111-1111-4111-8111-111111111111",
+      section: "WHY_JOIN" as const,
+      title: "Mengapa Menjadi Anggota",
+      content:
+        "Menjadi anggota Koperasi Konsumen Setia Budi Wanita memberikan kesempatan untuk mendapatkan berbagai manfaat keanggotaan serta berpartisipasi dalam pengembangan koperasi.",
+      status: "PUBLISHED" as const,
+      sortOrder: 1,
+    },
+    {
+      id: "72222222-2222-4222-8222-222222222222",
+      section: "BENEFIT" as const,
+      title: "Benefit Anggota",
+      content:
+        "Anggota dapat memperoleh berbagai manfaat sesuai dengan ketentuan dan layanan yang tersedia di Koperasi Konsumen Setia Budi Wanita.",
+      status: "PUBLISHED" as const,
+      sortOrder: 1,
+    },
+    {
+      id: "73333333-3333-4333-8333-333333333333",
+      section: "REQUIREMENT" as const,
+      title: "Syarat Keanggotaan",
+      content:
+        "Calon anggota perlu memenuhi persyaratan keanggotaan yang ditetapkan oleh Koperasi Konsumen Setia Budi Wanita dan mengikuti ketentuan yang berlaku.",
+      status: "PUBLISHED" as const,
+      sortOrder: 1,
+    },
+    {
+      id: "74444444-4444-4444-8444-444444444444",
+      section: "HOW_TO_REGISTER" as const,
+      title: "Cara Mendaftar",
+      content:
+        "Pendaftaran anggota dilakukan dengan mengikuti prosedur pendaftaran yang ditetapkan oleh Koperasi Konsumen Setia Budi Wanita. Informasi lebih lanjut dapat diperoleh melalui kontak resmi SBW.",
+      status: "PUBLISHED" as const,
+      sortOrder: 1,
+    },
+    {
+      id: "75555555-5555-4555-8555-555555555555",
+      section: "FAQ" as const,
+      title: "FAQ Keanggotaan",
+      content:
+        "Siapa yang dapat menjadi anggota? Masyarakat yang memenuhi ketentuan keanggotaan koperasi dapat mengajukan diri sebagai anggota sesuai prosedur yang berlaku.\n\nBagaimana cara mendapatkan informasi pendaftaran? Informasi mengenai pendaftaran dapat diperoleh melalui kanal kontak resmi SBW.",
+      status: "PUBLISHED" as const,
+      sortOrder: 1,
+    },
+  ];
+
+  for (const membership of membershipInfos) {
+    const result = await prisma.membershipInfo.upsert({
+      where: {
+        id: membership.id,
+      },
+      update: {
+        section: membership.section,
+        title: membership.title,
+        content: membership.content,
+        status: membership.status,
+        sortOrder: membership.sortOrder,
+        updatedById: admin.id,
+      },
+      create: {
+        id: membership.id,
+        section: membership.section,
+        title: membership.title,
+        content: membership.content,
+        mediaId: null,
+        status: membership.status,
+        sortOrder: membership.sortOrder,
+        createdById: admin.id,
+        updatedById: admin.id,
+      },
+    });
+
+    console.log(
+      `MembershipInfo berhasil disiapkan: ${result.section}`,
     );
   }
 
