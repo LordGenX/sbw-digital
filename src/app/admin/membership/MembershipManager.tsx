@@ -4,6 +4,15 @@ import { useState } from "react";
 
 import MembershipForm from "./MembershipForm";
 
+type MembershipMedia = {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  mimeType: string;
+  fileSize: string;
+  altText: string | null;
+};
+
 type MembershipData = {
   id: string;
   section:
@@ -15,6 +24,7 @@ type MembershipData = {
   title: string;
   content: string;
   mediaId: string | null;
+  media: MembershipMedia | null;
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   sortOrder: number;
 };
@@ -29,18 +39,44 @@ export default function MembershipManager({
   const [editingContent, setEditingContent] =
     useState<MembershipData | null>(null);
 
+  const [isCreating, setIsCreating] = useState(false);
+
+  const showForm =
+    isCreating || editingContent !== null;
+
   return (
     <>
-      <MembershipForm
-        key={editingContent?.id ?? "new"}
-        content={editingContent ?? undefined}
-        onCancel={() => setEditingContent(null)}
-      />
+      <button
+        type="button"
+        onClick={() => {
+          setEditingContent(null);
+          setIsCreating(true);
+        }}
+      >
+        + Tambah Membership
+      </button>
 
-      <hr />
+      {showForm && (
+        <>
+          <hr />
+
+          <MembershipForm
+            key={editingContent?.id ?? "new"}
+            content={editingContent ?? undefined}
+            onCancel={() => {
+              setEditingContent(null);
+              setIsCreating(false);
+            }}
+          />
+
+          <hr />
+        </>
+      )}
 
       {contents.length === 0 ? (
-        <p>Belum ada konten informasi keanggotaan.</p>
+        <p>
+          Belum ada informasi membership.
+        </p>
       ) : (
         <div>
           {contents.map((content) => (
@@ -48,25 +84,23 @@ export default function MembershipManager({
               <h2>{content.title}</h2>
 
               <p>
-                Section:{" "}
-                {content.section}
+                Section: {content.section}
               </p>
 
               <p>
-                Status:{" "}
-                {content.status}
+                Status: {content.status}
               </p>
 
               <p>
-                Urutan:{" "}
-                {content.sortOrder}
+                Urutan: {content.sortOrder}
               </p>
 
               <button
                 type="button"
-                onClick={() =>
-                  setEditingContent(content)
-                }
+                onClick={() => {
+                  setIsCreating(false);
+                  setEditingContent(content);
+                }}
               >
                 Edit
               </button>

@@ -10,6 +10,17 @@ import {
   publishMembershipInfo,
 } from "@/actions/membership.actions";
 
+import MediaPicker from "@/components/admin/MediaPicker";
+
+type MembershipMedia = {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  mimeType: string;
+  fileSize: string;
+  altText: string | null;
+};
+
 type MembershipData = {
   id: string;
   section:
@@ -21,6 +32,7 @@ type MembershipData = {
   title: string;
   content: string;
   mediaId: string | null;
+  media: MembershipMedia | null;
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   sortOrder: number;
 };
@@ -47,6 +59,10 @@ export default function MembershipForm({
 
   const [message, setMessage] =
     useState("");
+
+  const [mediaId, setMediaId] = useState(
+    content?.mediaId ?? "",
+  );
 
   const isCreateMode = !content;
 
@@ -320,18 +336,20 @@ export default function MembershipForm({
       </div>
 
       <div>
-        <label htmlFor="mediaId">
-          Media ID
-        </label>
+        <MediaPicker
+          value={mediaId || undefined}
+          selectedMedia={content?.media ?? null}
+          onChange={(selectedMediaId) => {
+            setMediaId(selectedMediaId ?? "");
+          }}
+        />
 
         <input
-          id="mediaId"
+          id="membership-media-id"
           name="mediaId"
-          type="text"
-          defaultValue={
-            content?.mediaId ?? ""
-          }
-          disabled={isPending}
+          type="hidden"
+          value={mediaId}
+          readOnly
         />
       </div>
 

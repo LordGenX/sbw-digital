@@ -76,8 +76,29 @@ type ServiceInput = z.infer<typeof serviceSchema>;
 // GET
 // =========================================================
 
+type ServiceListItem = {
+  id: string;
+  name: string;
+  slug: string;
+  shortDescription: string;
+  description: string;
+  metaTitle: string | null;
+  metaDescription: string | null;
+  mediaId: string | null;
+  media: {
+    id: string;
+    fileName: string;
+    fileUrl: string;
+    mimeType: string;
+    fileSize: string;
+    altText: string | null;
+  } | null;
+  status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+  sortOrder: number;
+};
+
 export async function getServices(): Promise<
-  ActionResult<Awaited<ReturnType<typeof getServicesQuery>>>
+  ActionResult<ServiceListItem[]>
 > {
   try {
     await requireAdmin();
@@ -86,7 +107,28 @@ export async function getServices(): Promise<
 
     return {
       success: true,
-      data: services,
+      data: services.map((item) => ({
+        id: item.id,
+        name: item.name,
+        slug: item.slug,
+        shortDescription: item.shortDescription,
+        description: item.description,
+        metaTitle: item.metaTitle,
+        metaDescription: item.metaDescription,
+        mediaId: item.mediaId,
+        media: item.media
+          ? {
+              id: item.media.id,
+              fileName: item.media.fileName,
+              fileUrl: item.media.fileUrl,
+              mimeType: item.media.mimeType,
+              fileSize: item.media.fileSize.toString(),
+              altText: item.media.altText,
+            }
+          : null,
+        status: item.status,
+        sortOrder: item.sortOrder,
+      })),
     };
   } catch (error) {
     return handleActionError(error);

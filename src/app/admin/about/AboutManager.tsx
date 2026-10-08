@@ -4,6 +4,15 @@ import { useState } from "react";
 
 import AboutForm from "./AboutForm";
 
+type AboutMedia = {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  mimeType: string;
+  fileSize: string;
+  altText: string | null;
+};
+
 type AboutData = {
   id: string;
   section:
@@ -15,6 +24,7 @@ type AboutData = {
   title: string;
   content: string;
   mediaId: string | null;
+  media: AboutMedia | null;
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   sortOrder: number;
 };

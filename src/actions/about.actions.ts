@@ -139,37 +139,74 @@ async function validateAboutSortOrder(
  * Mengambil seluruh konten About untuk
  * kebutuhan Admin Dashboard.
  */
+type AboutListItem = {
+  id: string;
+  section:
+    | "HISTORY"
+    | "VISION_MISSION"
+    | "PROFILE"
+    | "ORGANIZATION"
+    | "ACHIEVEMENT";
+  title: string;
+  content: string;
+  mediaId: string | null;
+  media: {
+    id: string;
+    fileName: string;
+    fileUrl: string;
+    mimeType: string;
+    fileSize: string;
+    altText: string | null;
+  } | null;
+  status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export async function getAboutContents(): Promise<
-  ActionResult<
-    Awaited<ReturnType<typeof getAboutQuery>>
-  >
+  ActionResult<AboutListItem[]>
 > {
   try {
     await requireAdmin();
 
-    const contents = await getAboutQuery();
+    const contents = await prisma.aboutContent.findMany({
+      include: {
+        media: true,
+      },
+      orderBy: [
+        { section: "asc" },
+        { sortOrder: "asc" },
+      ],
+    });
 
     return {
       success: true,
-      data: contents,
+      data: contents.map((item) => ({
+        id: item.id,
+        section: item.section,
+        title: item.title,
+        content: item.content,
+        mediaId: item.mediaId,
+        media: item.media
+          ? {
+              id: item.media.id,
+              fileName: item.media.fileName,
+              fileUrl: item.media.fileUrl,
+              mimeType: item.media.mimeType,
+              fileSize: item.media.fileSize.toString(),
+              altText: item.media.altText,
+            }
+          : null,
+        status: item.status,
+        sortOrder: item.sortOrder,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      })),
     };
   } catch (error) {
     return handleActionError(error);
   }
-}
-
-async function getAboutQuery() {
-  return prisma.aboutContent.findMany({
-    orderBy: [
-      { section: "asc" },
-      { sortOrder: "asc" },
-      { createdAt: "desc" },
-    ],
-
-    include: {
-      media: true,
-    },
-  });
 }
 
 /**

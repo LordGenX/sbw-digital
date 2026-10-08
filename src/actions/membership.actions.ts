@@ -137,10 +137,33 @@ async function validateMembershipSortOrder(
  * Mengambil seluruh MembershipInfo untuk
  * kebutuhan Admin Dashboard.
  */
+type MembershipListItem = {
+  id: string;
+  section:
+    | "WHY_JOIN"
+    | "BENEFIT"
+    | "REQUIREMENT"
+    | "HOW_TO_REGISTER"
+    | "FAQ";
+  title: string;
+  content: string;
+  mediaId: string | null;
+  media: {
+    id: string;
+    fileName: string;
+    fileUrl: string;
+    mimeType: string;
+    fileSize: string;
+    altText: string | null;
+  } | null;
+  status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+  sortOrder: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export async function getMembershipInfos(): Promise<
-  ActionResult<
-    Awaited<ReturnType<typeof getMembershipQuery>>
-  >
+  ActionResult<MembershipListItem[]>
 > {
   try {
     await requireAdmin();
@@ -149,7 +172,27 @@ export async function getMembershipInfos(): Promise<
 
     return {
       success: true,
-      data: contents,
+      data: contents.map((item) => ({
+        id: item.id,
+        section: item.section,
+        title: item.title,
+        content: item.content,
+        mediaId: item.mediaId,
+        media: item.media
+          ? {
+              id: item.media.id,
+              fileName: item.media.fileName,
+              fileUrl: item.media.fileUrl,
+              mimeType: item.media.mimeType,
+              fileSize: item.media.fileSize.toString(),
+              altText: item.media.altText,
+            }
+          : null,
+        status: item.status,
+        sortOrder: item.sortOrder,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      })),
     };
   } catch (error) {
     return handleActionError(error);

@@ -7,6 +7,17 @@ import {
   archiveService,
 } from "@/actions/service.actions";
 
+import MediaPicker from "@/components/admin/MediaPicker";
+
+type ServiceMedia = {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  mimeType: string;
+  fileSize: string;
+  altText: string | null;
+};
+
 type ServiceData = {
   id: string;
   name: string;
@@ -14,6 +25,7 @@ type ServiceData = {
   shortDescription: string;
   description: string;
   mediaId: string | null;
+  media: ServiceMedia | null;
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   sortOrder: number;
   metaTitle: string | null;
@@ -32,7 +44,7 @@ export default function ServiceForm({
   const [isPending, setIsPending] = useState(false);
   const [message, setMessage] = useState("");
 
-  const isEditMode = Boolean(service);
+  const [mediaId, setMediaId] = useState(service?.mediaId ?? "");
 
   async function handleSubmit(
     event: React.FormEvent<HTMLFormElement>,
@@ -227,18 +239,20 @@ export default function ServiceForm({
       </div>
 
       <div>
-        <label htmlFor="mediaId">
-          Media ID
-        </label>
+        <MediaPicker
+          value={mediaId || undefined}
+          selectedMedia={service.media ?? null}
+          onChange={(selectedMediaId) => {
+            setMediaId(selectedMediaId ?? "");
+          }}
+        />
 
         <input
-          id="mediaId"
+          id="service-mediaId"
           name="mediaId"
-          type="text"
-          defaultValue={
-            service.mediaId ?? ""
-          }
-          disabled={isPending}
+          type="hidden"
+          value={mediaId}
+          readOnly
         />
       </div>
 

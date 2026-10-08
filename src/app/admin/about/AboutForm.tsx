@@ -10,6 +10,17 @@ import {
   publishAboutContent,
 } from "@/actions/about.actions";
 
+import MediaPicker from "@/components/admin/MediaPicker";
+
+type AboutMedia = {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  mimeType: string;
+  fileSize: string;
+  altText: string | null;
+};
+
 type AboutData = {
   id: string;
   section:
@@ -21,6 +32,7 @@ type AboutData = {
   title: string;
   content: string;
   mediaId: string | null;
+  media: AboutMedia | null;
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   sortOrder: number;
 };
@@ -47,6 +59,10 @@ export default function AboutForm({
 
   const [message, setMessage] =
     useState("");
+
+  const [mediaId, setMediaId] = useState(
+    content?.mediaId ?? "",
+  );
 
   const isCreateMode = !content;
 
@@ -320,18 +336,20 @@ export default function AboutForm({
       </div>
 
       <div>
-        <label htmlFor="mediaId">
-          Media ID
-        </label>
+        <MediaPicker
+          value={mediaId || undefined}
+          selectedMedia={content?.media ?? null}
+          onChange={(selectedMediaId) => {
+            setMediaId(selectedMediaId ?? "");
+          }}
+        />
 
         <input
-          id="mediaId"
+          id="about-media-id"
           name="mediaId"
-          type="text"
-          defaultValue={
-            content?.mediaId ?? ""
-          }
-          disabled={isPending}
+          type="hidden"
+          value={mediaId}
+          readOnly
         />
       </div>
 

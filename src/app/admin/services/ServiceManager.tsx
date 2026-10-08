@@ -4,6 +4,15 @@ import { useState } from "react";
 
 import ServiceForm from "./ServiceForm";
 
+type ServiceMedia = {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  mimeType: string;
+  fileSize: string;
+  altText: string | null;
+};
+
 type ServiceData = {
   id: string;
   name: string;
@@ -11,6 +20,7 @@ type ServiceData = {
   shortDescription: string;
   description: string;
   mediaId: string | null;
+  media: ServiceMedia | null;
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   sortOrder: number;
   metaTitle: string | null;
