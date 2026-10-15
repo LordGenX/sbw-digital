@@ -8,8 +8,6 @@ export default async function HeroPage() {
   if (!result.success) {
     return (
       <main>
-        <h1>Hero Section</h1>
-
         <p>
           Error: {result.error.message}
         </p>
@@ -19,8 +17,6 @@ export default async function HeroPage() {
 
   return (
     <main>
-      <h1>Hero Section</h1>
-
       <HeroManager heroes={result.data} />
     </main>
   );

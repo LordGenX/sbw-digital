@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { type FormEvent, useState } from "react";
+import { ArrowLeft, Check, LoaderCircle, Pencil } from "lucide-react";
 
 import {
   updateStatistic,
@@ -55,7 +56,6 @@ export default function StatisticForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
     setError("");
 
     const value = Number(form.value);
@@ -101,77 +101,134 @@ export default function StatisticForm({
     }
   }
 
+  const inputClassName =
+    "w-full rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-900 outline-none transition placeholder:text-gray-400 hover:border-gray-300 focus:border-orange-500 focus:ring-2 focus:ring-orange-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:opacity-70";
+
+  const labelClassName = "text-sm font-semibold text-gray-700";
+
   return (
     <form
       onSubmit={handleSubmit}
-      className="space-y-6 rounded-lg border bg-white p-6"
+      className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
     >
-      <div>
-        <h2 className="text-lg font-semibold">Edit Statistik</h2>
+      {/* Header form */}
+      <div className="border-b border-gray-100 bg-linear-to-r from-orange-50 to-white px-5 py-5 sm:px-7">
+        <div className="flex items-start gap-3">
+          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-white text-orange-600 shadow-sm ring-1 ring-orange-100">
+            <Pencil size={20} />
+          </div>
 
-        <p className="mt-1 text-sm text-muted-foreground">
-          Perbarui data statistik yang ditampilkan pada website publik.
-        </p>
+          <div>
+            <p className="text-xs font-semibold tracking-wide text-orange-700">
+              MANAJEMEN KONTEN
+            </p>
+
+            <h2 className="mt-1 text-xl font-bold tracking-tight text-gray-900">
+              Edit Statistik
+            </h2>
+
+            <p className="mt-1 text-sm leading-6 text-gray-500">
+              Perbarui data statistik yang ditampilkan pada website publik SBW Digital.
+            </p>
+          </div>
+        </div>
       </div>
 
-      {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+      {/* Isi form */}
+      <div className="space-y-5 p-5 sm:p-7">
+        {error && (
+          <div
+            role="alert"
+            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          >
+            {error}
+          </div>
+        )}
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          <div className="grid content-start gap-2">
+            <label htmlFor="name" className={labelClassName}>
+              Nama Statistik
+            </label>
+
+            <input
+              id="name"
+              type="text"
+              value={form.name}
+              onChange={(event) => updateField("name", event.target.value)}
+              maxLength={100}
+              className={inputClassName}
+              disabled={isSubmitting}
+              required
+            />
+          </div>
+
+          <div className="grid content-start gap-2">
+            <label htmlFor="value" className={labelClassName}>
+              Nilai
+            </label>
+
+            <input
+              id="value"
+              type="number"
+              step="0.01"
+              value={form.value}
+              onChange={(event) => updateField("value", event.target.value)}
+              className={inputClassName}
+              disabled={isSubmitting}
+              required
+            />
+
+            <p className="text-xs text-gray-500">
+              Masukkan angka statistik yang ingin ditampilkan.
+            </p>
+          </div>
+
+          <div className="grid content-start gap-2">
+            <label htmlFor="unit" className={labelClassName}>
+              Unit
+            </label>
+
+            <input
+              id="unit"
+              type="text"
+              value={form.unit}
+              onChange={(event) => updateField("unit", event.target.value)}
+              maxLength={50}
+              placeholder="Contoh: Orang, Tahun, Unit"
+              className={inputClassName}
+              disabled={isSubmitting}
+            />
+          </div>
+
+          <div className="grid content-start gap-2">
+            <label htmlFor="sortOrder" className={labelClassName}>
+              Urutan Tampilan
+            </label>
+
+            <input
+              id="sortOrder"
+              type="number"
+              min={1}
+              step={1}
+              value={form.sortOrder}
+              onChange={(event) =>
+                updateField("sortOrder", event.target.value)
+              }
+              className={inputClassName}
+              disabled={isSubmitting}
+              required
+            />
+
+            <p className="text-xs text-gray-500">
+              Gunakan bilangan bulat mulai dari 1.
+            </p>
+          </div>
         </div>
-      )}
-
-      <div className="grid gap-5">
-        <div className="grid gap-2">
-          <label htmlFor="name" className="text-sm font-medium">
-            Nama
-          </label>
-
-          <input
-            id="name"
-            type="text"
-            value={form.name}
-            onChange={(event) => updateField("name", event.target.value)}
-            maxLength={100}
-            className="rounded-md border px-3 py-2"
-            disabled={isSubmitting}
-          />
-        </div>
 
         <div className="grid gap-2">
-          <label htmlFor="value" className="text-sm font-medium">
-            Nilai
-          </label>
-
-          <input
-            id="value"
-            type="number"
-            step="0.01"
-            value={form.value}
-            onChange={(event) => updateField("value", event.target.value)}
-            className="rounded-md border px-3 py-2"
-            disabled={isSubmitting}
-          />
-        </div>
-
-        <div className="grid gap-2">
-          <label htmlFor="unit" className="text-sm font-medium">
-            Unit
-          </label>
-
-          <input
-            id="unit"
-            type="text"
-            value={form.unit}
-            onChange={(event) => updateField("unit", event.target.value)}
-            maxLength={50}
-            className="rounded-md border px-3 py-2"
-            disabled={isSubmitting}
-          />
-        </div>
-
-        <div className="grid gap-2">
-          <label htmlFor="description" className="text-sm font-medium">
-            Description
+          <label htmlFor="description" className={labelClassName}>
+            Deskripsi
           </label>
 
           <textarea
@@ -181,55 +238,73 @@ export default function StatisticForm({
               updateField("description", event.target.value)
             }
             rows={4}
-            className="rounded-md border px-3 py-2"
+            className={`${inputClassName} resize-y`}
             disabled={isSubmitting}
+            placeholder="Jelaskan informasi statistik ini..."
           />
         </div>
 
+        {/* Status hanya sebagai informasi */}
         <div className="grid gap-2">
-          <label htmlFor="sortOrder" className="text-sm font-medium">
-            Urutan
-          </label>
+          <span className={labelClassName}>Status Publikasi</span>
 
-          <input
-            id="sortOrder"
-            type="number"
-            min={1}
-            step={1}
-            value={form.sortOrder}
-            onChange={(event) =>
-              updateField("sortOrder", event.target.value)
-            }
-            className="rounded-md border px-3 py-2"
-            disabled={isSubmitting}
-          />
-        </div>
+          <div className="flex min-h-11 items-center justify-between rounded-lg border border-gray-200 bg-gray-50 px-3.5 py-2.5">
+            <span className="text-sm text-gray-600">
+              Status saat ini
+            </span>
 
-        <div className="grid gap-2">
-          <span className="text-sm font-medium">Status</span>
-
-          <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
-            {statistic.status}
+            <span
+              className={
+                statistic.status === "ACTIVE"
+                  ? "inline-flex items-center gap-2 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700"
+                  : "inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-600"
+              }
+            >
+              <span
+                className={
+                  statistic.status === "ACTIVE"
+                    ? "size-1.5 rounded-full bg-green-500"
+                    : "size-1.5 rounded-full bg-gray-400"
+                }
+              />
+              {statistic.status}
+            </span>
           </div>
+
+          <p className="text-xs text-gray-500">
+            Status ditampilkan sebagai informasi dan tidak diubah melalui form ini.
+          </p>
         </div>
       </div>
 
-      <div className="flex justify-end gap-3">
+      {/* Footer tombol */}
+      <div className="flex flex-col-reverse gap-3 border-t border-gray-100 bg-gray-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
         <button
           type="button"
           onClick={onCancel}
           disabled={isSubmitting}
-          className="rounded-md border px-4 py-2 text-sm"
+          className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-300 disabled:cursor-not-allowed disabled:opacity-50"
         >
+          <ArrowLeft size={16} />
           Batal
         </button>
 
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-md bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-orange-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-orange-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isSubmitting ? "Menyimpan..." : "Simpan Perubahan"}
+          {isSubmitting ? (
+            <>
+              <LoaderCircle size={16} className="animate-spin" />
+              Menyimpan...
+            </>
+          ) : (
+            <>
+              <Check size={16} />
+              Simpan Perubahan
+            </>
+          )}
         </button>
       </div>
     </form>

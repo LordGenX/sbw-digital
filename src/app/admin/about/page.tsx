@@ -8,7 +8,6 @@ export default async function AboutPage() {
   if (!result.success) {
     return (
       <main>
-        <h1>Tentang SBW</h1>
         <p>
           Error: {result.error.message}
         </p>
@@ -18,8 +17,6 @@ export default async function AboutPage() {
 
   return (
     <main>
-      <h1>Tentang SBW</h1>
-
       <AboutManager
         contents={result.data}
       />

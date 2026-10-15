@@ -8,7 +8,6 @@ export default async function NewsPage() {
   if (!result.success) {
     return (
       <main>
-        <h1>Berita</h1>
 
         <p>
           Error: {result.error.message}
@@ -19,7 +18,6 @@ export default async function NewsPage() {
 
   return (
     <main>
-      <h1>Berita</h1>
 
       <NewsManager news={result.data} />
     </main>

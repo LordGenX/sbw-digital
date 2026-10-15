@@ -8,7 +8,6 @@ export default async function ServicesPage() {
   if (!result.success) {
     return (
       <main>
-        <h1>Layanan</h1>
 
         <p>
           Error: {result.error.message}
@@ -19,12 +18,6 @@ export default async function ServicesPage() {
 
   return (
     <main>
-      <h1>Layanan</h1>
-
-      <p>
-        Kelola informasi 8 layanan SBW.
-      </p>
-
       <ServiceManager
         services={result.data}
       />

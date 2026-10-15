@@ -8,7 +8,6 @@ export default async function EventsPage() {
   if ("error" in result) {
     return (
       <div>
-        <h1>Agenda</h1>
         <p>{result.error.message}</p>
       </div>
     );
@@ -16,7 +15,6 @@ export default async function EventsPage() {
 
   return (
     <div>
-      <h1>Agenda</h1>
 
       <EventManager events={result.data} />
     </div>

@@ -9,7 +9,6 @@ export default async function MembershipPage() {
   if (!result.success) {
     return (
       <main>
-        <h1>Informasi Keanggotaan</h1>
 
         <p>
           Error:{" "}
@@ -21,8 +20,6 @@ export default async function MembershipPage() {
 
   return (
     <main>
-      <h1>Informasi Keanggotaan</h1>
-
       <MembershipManager
         contents={result.data}
       />
