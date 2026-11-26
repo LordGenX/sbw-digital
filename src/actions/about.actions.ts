@@ -52,10 +52,8 @@ const aboutSchema = z.object({
 });
 
 /**
- * Schema untuk UPDATE.
- *
  * Status PUBLISHED tidak dapat diubah melalui
- * update biasa. Publishing dilakukan melalui
+ * update biasa. Publishing menggunakan action
  * publishAboutContent().
  */
 const aboutUpdateSchema = aboutSchema.extend({
@@ -67,10 +65,7 @@ type AboutUpdateInput = z.infer<
 >;
 
 /**
- * Schema untuk CREATE.
- *
- * Status tidak boleh dikirim dari client.
- * Record baru selalu dibuat sebagai DRAFT.
+ * Konten baru selalu dibuat sebagai DRAFT.
  */
 const aboutCreateSchema = aboutSchema.omit({
   status: true,
@@ -80,22 +75,28 @@ type AboutCreateInput = z.infer<
   typeof aboutCreateSchema
 >;
 
+type AboutSection = z.infer<typeof aboutSectionSchema>;
+
 /**
- * Validasi konflik sortOrder.
+ * Validasi sortOrder berdasarkan section dan status.
  *
- * Aturan:
+ * DRAFT:
+ * - sortOrder unik dalam section yang sama.
+ * - Berlaku untuk semua section.
  *
- * - ARCHIVED tidak diperhitungkan.
- * - Satu section dapat memiliki satu DRAFT
- *   pada sortOrder tertentu.
- * - Satu section dapat memiliki satu PUBLISHED
- *   pada sortOrder tertentu.
- * - DRAFT dan PUBLISHED boleh memiliki
- *   sortOrder yang sama karena digunakan untuk
- *   workflow replacement/versioning.
+ * PUBLISHED:
+ * - Validasi keunikan sortOrder pada section yang sama.
+ * - Untuk section selain ACHIEVEMENT, aturan satu
+ *   Published per section tetap berlaku.
+ *
+ * ARCHIVED:
+ * - Tidak ikut dalam validasi.
+ *
+ * excludeId digunakan ketika memperbarui konten
+ * agar konten itu sendiri tidak dianggap konflik.
  */
 async function validateAboutSortOrder(
-  section: AboutCreateInput["section"],
+  section: AboutSection,
   sortOrder: number,
   status: "DRAFT" | "PUBLISHED",
   excludeId?: string,
@@ -126,9 +127,60 @@ async function validateAboutSortOrder(
     });
 
   if (conflictingContent) {
+    const statusLabel =
+      status === "DRAFT" ? "Draft" : "Published";
+
     throw new AppError(
       ERROR_CODES.CONFLICT,
-      `Urutan ${sortOrder} sudah digunakan untuk konten ${status} pada section ${section}.`,
+      `Urutan ${sortOrder} sudah digunakan oleh konten ${statusLabel} "${conflictingContent.title}" pada section ${section}. Gunakan urutan lain.`,
+    );
+  }
+}
+
+/**
+ * Validasi aturan satu Published per section.
+ *
+ * Achievement boleh memiliki beberapa Published,
+ * selama sortOrder masing-masing berbeda.
+ *
+ * Section selain Achievement tetap hanya boleh
+ * memiliki satu Published.
+ *
+ * Pengecekan ini dilakukan sebelum publikasi.
+ */
+async function validatePublishedSection(
+  section: AboutSection,
+  excludeId?: string,
+) {
+  if (section === "ACHIEVEMENT") {
+    return;
+  }
+
+  const existingPublished =
+    await prisma.aboutContent.findFirst({
+      where: {
+        section,
+        status: "PUBLISHED",
+
+        ...(excludeId
+          ? {
+              id: {
+                not: excludeId,
+              },
+            }
+          : {}),
+      },
+
+      select: {
+        id: true,
+        title: true,
+      },
+    });
+
+  if (existingPublished) {
+    throw new AppError(
+      ERROR_CODES.CONFLICT,
+      `Section ${section} sudah memiliki konten Published "${existingPublished.title}". Arsipkan konten tersebut terlebih dahulu.`,
     );
   }
 }
@@ -136,17 +188,11 @@ async function validateAboutSortOrder(
 /**
  * GET
  *
- * Mengambil seluruh konten About untuk
- * kebutuhan Admin Dashboard.
+ * Mengambil seluruh konten About untuk Admin.
  */
 type AboutListItem = {
   id: string;
-  section:
-    | "HISTORY"
-    | "VISION_MISSION"
-    | "PROFILE"
-    | "ORGANIZATION"
-    | "ACHIEVEMENT";
+  section: AboutSection;
   title: string;
   content: string;
   mediaId: string | null;
@@ -212,7 +258,7 @@ export async function getAboutContents(): Promise<
 /**
  * CREATE
  *
- * Record baru selalu dibuat sebagai DRAFT.
+ * Konten baru selalu dibuat sebagai DRAFT.
  */
 export async function createAboutContent(
   input: AboutCreateInput,
@@ -223,21 +269,20 @@ export async function createAboutContent(
 > {
   try {
     const admin = await requireAdmin();
+    const validated = aboutCreateSchema.parse(input);
 
-    const validated =
-      aboutCreateSchema.parse(input);
-
+    // Draft harus memiliki sortOrder unik
+    // pada section yang sama.
     await validateAboutSortOrder(
       validated.section,
       validated.sortOrder,
       "DRAFT",
     );
 
-    const content =
-      await createAboutQuery(
-        validated,
-        admin.id,
-      );
+    const content = await createAboutQuery(
+      validated,
+      admin.id,
+    );
 
     revalidatePath("/admin/about");
 
@@ -260,15 +305,11 @@ async function createAboutQuery(
       title: input.title,
       content: input.content,
       mediaId: input.mediaId || null,
-
       status: "DRAFT",
-
       sortOrder: input.sortOrder,
-
       createdById: adminId,
       updatedById: adminId,
     },
-
     include: {
       media: true,
     },
@@ -280,9 +321,9 @@ async function createAboutQuery(
  *
  * Mengubah data About.
  *
- * Jika record saat ini PUBLISHED, statusnya
- * tetap PUBLISHED. Status tidak dapat diubah
- * melalui update biasa.
+ * Jika konten sudah Published, statusnya tetap
+ * Published. Status tidak dapat diubah melalui
+ * update biasa.
  */
 export async function updateAboutContent(
   id: string,
@@ -302,15 +343,13 @@ export async function updateAboutContent(
       );
     }
 
-    const validated =
-      aboutUpdateSchema.parse(input);
+    const validated = aboutUpdateSchema.parse(input);
 
-    const content =
-      await updateAboutQuery(
-        id,
-        validated,
-        admin.id,
-      );
+    const content = await updateAboutQuery(
+      id,
+      validated,
+      admin.id,
+    );
 
     revalidatePath("/admin/about");
 
@@ -343,8 +382,11 @@ async function updateAboutQuery(
   }
 
   /**
-   * Published harus tetap Published ketika
-   * diedit melalui update.
+   * Konten Published tetap Published.
+   *
+   * Konten Draft dapat menjadi Draft atau Archived.
+   * Konten Archived dapat tetap Archived atau
+   * dikembalikan menjadi Draft melalui update.
    */
   const nextStatus =
     existingContent.status === "PUBLISHED"
@@ -352,9 +394,7 @@ async function updateAboutQuery(
       : input.status;
 
   /**
-   * ARCHIVED tidak membutuhkan pengecekan
-   * duplicate sortOrder karena record archived
-   * tidak dianggap aktif.
+   * Validasi sortOrder hanya untuk status aktif.
    */
   if (nextStatus !== "ARCHIVED") {
     await validateAboutSortOrder(
@@ -365,24 +405,33 @@ async function updateAboutQuery(
     );
   }
 
+  /**
+   * Pertahankan aturan satu Published per section
+   * untuk section selain Achievement.
+   */
+  if (
+    nextStatus === "PUBLISHED" &&
+    existingContent.section !== input.section
+  ) {
+    await validatePublishedSection(
+      input.section,
+      id,
+    );
+  }
+
   return prisma.aboutContent.update({
     where: {
       id,
     },
-
     data: {
       section: input.section,
       title: input.title,
       content: input.content,
       mediaId: input.mediaId || null,
-
       status: nextStatus,
-
       sortOrder: input.sortOrder,
-
       updatedById: adminId,
     },
-
     include: {
       media: true,
     },
@@ -411,11 +460,10 @@ export async function archiveAboutContent(
       );
     }
 
-    const content =
-      await archiveAboutQuery(
-        id,
-        admin.id,
-      );
+    const content = await archiveAboutQuery(
+      id,
+      admin.id,
+    );
 
     revalidatePath("/admin/about");
 
@@ -450,12 +498,10 @@ async function archiveAboutQuery(
     where: {
       id,
     },
-
     data: {
       status: "ARCHIVED",
       updatedById: adminId,
     },
-
     include: {
       media: true,
     },
@@ -465,14 +511,18 @@ async function archiveAboutQuery(
 /**
  * PUBLISH
  *
- * Menerbitkan satu konten About.
+ * Menerbitkan konten Draft.
  *
- * Jika sudah ada PUBLISHED pada section yang
- * sama, konten tersebut diubah menjadi ARCHIVED
- * dalam transaction yang sama.
+ * Achievement:
+ * - Boleh memiliki beberapa konten Published.
+ * - sortOrder setiap konten Published harus unik.
+ *
+ * Section selain Achievement:
+ * - Konten Published sebelumnya harus diarsipkan.
  */
 export async function publishAboutContent(
   id: string,
+  requestedSortOrder?: number,
 ): Promise<
   ActionResult<
     Awaited<ReturnType<typeof publishAboutQuery>>
@@ -488,11 +538,24 @@ export async function publishAboutContent(
       );
     }
 
-    const content =
-      await publishAboutQuery(
-        id,
-        admin.id,
+    if (
+      requestedSortOrder !== undefined &&
+      (
+        !Number.isInteger(requestedSortOrder) ||
+        requestedSortOrder < 0
+      )
+    ) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Urutan harus berupa bilangan bulat dan tidak boleh negatif.",
       );
+    }
+
+    const content = await publishAboutQuery(
+      id,
+      admin.id,
+      requestedSortOrder,
+    );
 
     revalidatePath("/admin/about");
 
@@ -508,14 +571,14 @@ export async function publishAboutContent(
 async function publishAboutQuery(
   id: string,
   adminId: string,
+  requestedSortOrder?: number,
 ) {
   return prisma.$transaction(async (tx) => {
-    const target =
-      await tx.aboutContent.findUnique({
-        where: {
-          id,
-        },
-      });
+    const target = await tx.aboutContent.findUnique({
+      where: {
+        id,
+      },
+    });
 
     if (!target) {
       throw new AppError(
@@ -524,11 +587,6 @@ async function publishAboutQuery(
       );
     }
 
-    /**
-     * Target harus berasal dari DRAFT.
-     *
-     * Published tidak perlu dipublish ulang.
-     */
     if (target.status !== "DRAFT") {
       throw new AppError(
         ERROR_CODES.CONFLICT,
@@ -536,42 +594,89 @@ async function publishAboutQuery(
       );
     }
 
+    // Gunakan nilai terbaru dari form jika tersedia.
+    const effectiveSortOrder =
+      requestedSortOrder ?? target.sortOrder;
+
+    if (
+      !Number.isInteger(effectiveSortOrder) ||
+      effectiveSortOrder < 0
+    ) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Urutan harus berupa bilangan bulat dan tidak boleh negatif.",
+      );
+    }
+
     /**
-     * Archive PUBLISHED lama pada section
-     * yang sama.
+     * Cek konflik Published berdasarkan section
+     * dan sortOrder sebelum mengubah status.
      */
-    await tx.aboutContent.updateMany({
-      where: {
-        section: target.section,
-        status: "PUBLISHED",
-        id: {
-          not: id,
+    const conflictingPublished =
+      await tx.aboutContent.findFirst({
+        where: {
+          section: target.section,
+          status: "PUBLISHED",
+          sortOrder: effectiveSortOrder,
+          id: {
+            not: id,
+          },
         },
-      },
-
-      data: {
-        status: "ARCHIVED",
-        updatedById: adminId,
-      },
-    });
+        select: {
+          id: true,
+          title: true,
+        },
+      });
 
     /**
-     * Target menjadi PUBLISHED.
+     * Untuk Achievement, sortOrder Published
+     * wajib unik.
+     */
+    if (
+      target.section === "ACHIEVEMENT" &&
+      conflictingPublished
+    ) {
+      throw new AppError(
+        ERROR_CODES.CONFLICT,
+        `Urutan ${effectiveSortOrder} sudah digunakan oleh Published "${conflictingPublished.title}" pada section Achievement.`,
+      );
+    }
+
+    /**
+     * Section selain Achievement hanya boleh
+     * memiliki satu konten Published.
      *
-     * Partial unique index pada database tetap
-     * menjadi safety net untuk aturan satu
-     * PUBLISHED per section.
+     * Konten Published lama diarsipkan sebelum
+     * konten Draft diterbitkan.
+     */
+    if (target.section !== "ACHIEVEMENT") {
+      await tx.aboutContent.updateMany({
+        where: {
+          section: target.section,
+          status: "PUBLISHED",
+          id: {
+            not: id,
+          },
+        },
+        data: {
+          status: "ARCHIVED",
+          updatedById: adminId,
+        },
+      });
+    }
+
+    /**
+     * Terbitkan konten dengan sortOrder terbaru.
      */
     return tx.aboutContent.update({
       where: {
         id,
       },
-
       data: {
         status: "PUBLISHED",
+        sortOrder: effectiveSortOrder,
         updatedById: adminId,
       },
-
       include: {
         media: true,
       },

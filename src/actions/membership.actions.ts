@@ -26,16 +26,23 @@ const contentStatusSchema = z.enum([
 const membershipSchema = z.object({
   section: membershipSectionSchema,
 
+  contentKey: z
+    .string()
+    .trim()
+    .min(1, "Content key wajib diisi.")
+    .max(100, "Content key maksimal 100 karakter.")
+    .regex(
+      /^[A-Z0-9_]+$/,
+      "Content key hanya boleh berisi huruf kapital, angka, dan underscore.",
+    ),
+
   title: z
     .string()
     .trim()
     .min(1, "Judul wajib diisi.")
     .max(200, "Judul maksimal 200 karakter."),
 
-  content: z
-    .string()
-    .trim()
-    .min(1, "Konten wajib diisi."),
+  content: z.string().trim().min(1, "Konten wajib diisi."),
 
   mediaId: z
     .string()
@@ -51,100 +58,116 @@ const membershipSchema = z.object({
     .min(0, "Urutan tidak boleh negatif."),
 });
 
-/**
- * Schema untuk UPDATE.
- *
- * Status PUBLISHED tidak dapat diubah melalui
- * update biasa. Publishing dilakukan melalui
- * publishMembershipInfo().
- */
 const membershipUpdateSchema = membershipSchema.extend({
   status: z.enum(["DRAFT", "ARCHIVED"]),
+});
+
+const membershipCreateSchema = membershipSchema.omit({
+  status: true,
 });
 
 type MembershipUpdateInput = z.infer<
   typeof membershipUpdateSchema
 >;
 
-/**
- * Schema untuk CREATE.
- *
- * Status tidak boleh dikirim dari client.
- * Record baru selalu dibuat sebagai DRAFT.
- */
-const membershipCreateSchema = membershipSchema.omit({
-  status: true,
-});
-
 type MembershipCreateInput = z.infer<
   typeof membershipCreateSchema
 >;
 
+type MembershipSection = z.infer<
+  typeof membershipSectionSchema
+>;
+
+type MembershipStatus = z.infer<
+  typeof contentStatusSchema
+>;
+
+type MembershipSaveInput = Omit<
+  MembershipCreateInput,
+  "mediaId"
+> & {
+  mediaId?: string;
+};
+
+function normalizeInput(
+  input: MembershipSaveInput,
+): MembershipSaveInput {
+  return {
+    ...input,
+    contentKey: input.contentKey.trim().toUpperCase(),
+    mediaId: input.mediaId || undefined,
+  };
+}
+
 /**
- * Validasi konflik sortOrder.
- *
- * Aturan:
- * - ARCHIVED tidak diperhitungkan.
- * - Satu section dapat memiliki satu DRAFT
- *   pada sortOrder tertentu.
- * - Satu section dapat memiliki satu PUBLISHED
- *   pada sortOrder tertentu.
- * - DRAFT dan PUBLISHED boleh memiliki
- *   sortOrder yang sama karena digunakan untuk
- *   workflow replacement/versioning.
+ * Memastikan kombinasi section + status + sortOrder unik.
+ * contentKey tidak digunakan sebagai pembeda urutan.
  */
 async function validateMembershipSortOrder(
-  section: MembershipCreateInput["section"],
+  section: MembershipSection,
   sortOrder: number,
-  status: "DRAFT" | "PUBLISHED",
+  status: MembershipStatus,
   excludeId?: string,
+  tx: typeof prisma = prisma,
 ) {
-  const conflictingContent =
-    await prisma.membershipInfo.findFirst({
-      where: {
-        section,
-        sortOrder,
-        status,
-        ...(excludeId
-          ? {
-              id: {
-                not: excludeId,
-              },
-            }
-          : {}),
-      },
-
-      select: {
-        id: true,
-        title: true,
-        section: true,
-        status: true,
-        sortOrder: true,
-      },
-    });
+  const conflictingContent = await tx.membershipInfo.findFirst({
+    where: {
+      section,
+      status,
+      sortOrder,
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
+    select: {
+      id: true,
+      title: true,
+    },
+  });
 
   if (conflictingContent) {
     throw new AppError(
       ERROR_CODES.CONFLICT,
-      `Urutan ${sortOrder} sudah digunakan untuk konten ${status} pada section ${section}.`,
+      `Urutan ${sortOrder} sudah digunakan oleh konten "${conflictingContent.title}" dengan status ${status} pada section ${section}.`,
     );
   }
 }
 
 /**
- * GET
- *
- * Mengambil seluruh MembershipInfo untuk
- * kebutuhan Admin Dashboard.
+ * Mencari urutan Archived terkecil yang tersedia.
  */
+async function getNextArchivedSortOrder(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  section: MembershipSection,
+): Promise<number> {
+  const archivedContents = await tx.membershipInfo.findMany({
+    where: {
+      section,
+      status: "ARCHIVED",
+    },
+    select: {
+      sortOrder: true,
+    },
+    orderBy: {
+      sortOrder: "asc",
+    },
+  });
+
+  const usedOrders = new Set(
+    archivedContents.map((item) => item.sortOrder),
+  );
+
+  let nextOrder = 0;
+
+  while (usedOrders.has(nextOrder)) {
+    nextOrder += 1;
+  }
+
+  return nextOrder;
+}
+
 type MembershipListItem = {
   id: string;
-  section:
-    | "WHY_JOIN"
-    | "BENEFIT"
-    | "REQUIREMENT"
-    | "HOW_TO_REGISTER"
-    | "FAQ";
+  section: MembershipSection;
+  contentKey: string;
   title: string;
   content: string;
   mediaId: string | null;
@@ -156,12 +179,15 @@ type MembershipListItem = {
     fileSize: string;
     altText: string | null;
   } | null;
-  status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+  status: MembershipStatus;
   sortOrder: number;
   createdAt: Date;
   updatedAt: Date;
 };
 
+/**
+ * GET
+ */
 export async function getMembershipInfos(): Promise<
   ActionResult<MembershipListItem[]>
 > {
@@ -175,6 +201,7 @@ export async function getMembershipInfos(): Promise<
       data: contents.map((item) => ({
         id: item.id,
         section: item.section,
+        contentKey: item.contentKey,
         title: item.title,
         content: item.content,
         mediaId: item.mediaId,
@@ -203,10 +230,10 @@ async function getMembershipQuery() {
   return prisma.membershipInfo.findMany({
     orderBy: [
       { section: "asc" },
+      { status: "asc" },
       { sortOrder: "asc" },
       { createdAt: "desc" },
     ],
-
     include: {
       media: true,
     },
@@ -215,26 +242,17 @@ async function getMembershipQuery() {
 
 /**
  * CREATE
- *
- * Record baru selalu dibuat sebagai DRAFT.
+ * Konten baru selalu dibuat sebagai Draft.
  */
 export async function createMembershipInfo(
   input: MembershipCreateInput,
 ): Promise<
-  ActionResult<
-    Awaited<ReturnType<typeof createMembershipQuery>>
-  >
+  ActionResult<Awaited<ReturnType<typeof createMembershipQuery>>>
 > {
   try {
     const admin = await requireAdmin();
-
-    const validated =
-      membershipCreateSchema.parse(input);
-
-    await validateMembershipSortOrder(
-      validated.section,
-      validated.sortOrder,
-      "DRAFT",
+    const validated = membershipCreateSchema.parse(
+      normalizeInput(input),
     );
 
     const content = await createMembershipQuery(
@@ -242,7 +260,7 @@ export async function createMembershipInfo(
       admin.id,
     );
 
-    revalidatePath("/admin/membership");
+    revalidateMembershipPaths();
 
     return {
       success: true,
@@ -257,43 +275,43 @@ async function createMembershipQuery(
   input: MembershipCreateInput,
   adminId: string,
 ) {
-  return prisma.membershipInfo.create({
-    data: {
-      section: input.section,
-      title: input.title,
-      content: input.content,
-      mediaId: input.mediaId || null,
+  return prisma.$transaction(async (tx) => {
+    await validateMembershipSortOrder(
+      input.section,
+      input.sortOrder,
+      "DRAFT",
+      undefined,
+      tx as typeof prisma,
+    );
 
-      status: "DRAFT",
-
-      sortOrder: input.sortOrder,
-
-      createdById: adminId,
-      updatedById: adminId,
-    },
-
-    include: {
-      media: true,
-    },
+    return tx.membershipInfo.create({
+      data: {
+        section: input.section,
+        contentKey: input.contentKey,
+        title: input.title,
+        content: input.content,
+        mediaId: input.mediaId || null,
+        status: "DRAFT",
+        sortOrder: input.sortOrder,
+        createdById: adminId,
+        updatedById: adminId,
+      },
+      include: {
+        media: true,
+      },
+    });
   });
 }
 
 /**
  * UPDATE
- *
- * Mengubah data MembershipInfo.
- *
- * Jika record saat ini PUBLISHED, statusnya
- * tetap PUBLISHED. Status tidak dapat diubah
- * melalui update biasa.
+ * Status Published tidak diubah melalui update biasa.
  */
 export async function updateMembershipInfo(
   id: string,
   input: MembershipUpdateInput,
 ): Promise<
-  ActionResult<
-    Awaited<ReturnType<typeof updateMembershipQuery>>
-  >
+  ActionResult<Awaited<ReturnType<typeof updateMembershipQuery>>>
 > {
   try {
     const admin = await requireAdmin();
@@ -305,8 +323,9 @@ export async function updateMembershipInfo(
       );
     }
 
-    const validated =
-      membershipUpdateSchema.parse(input);
+    const validated = membershipUpdateSchema.parse(
+      normalizeInput(input),
+    );
 
     const content = await updateMembershipQuery(
       id,
@@ -314,7 +333,7 @@ export async function updateMembershipInfo(
       admin.id,
     );
 
-    revalidatePath("/admin/membership");
+    revalidateMembershipPaths();
 
     return {
       success: true,
@@ -330,78 +349,66 @@ async function updateMembershipQuery(
   input: MembershipUpdateInput,
   adminId: string,
 ) {
-  const existingContent =
-    await prisma.membershipInfo.findUnique({
-      where: {
-        id,
-      },
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.membershipInfo.findUnique({
+      where: { id },
     });
 
-  if (!existingContent) {
-    throw new AppError(
-      ERROR_CODES.NOT_FOUND,
-      "Membership Info tidak ditemukan.",
-    );
-  }
+    if (!existing) {
+      throw new AppError(
+        ERROR_CODES.NOT_FOUND,
+        "Membership Info tidak ditemukan.",
+      );
+    }
 
-  /**
-   * Published harus tetap Published ketika
-   * diedit melalui update.
-   */
-  const nextStatus =
-    existingContent.status === "PUBLISHED"
-      ? "PUBLISHED"
-      : input.status;
+    if (existing.status === "ARCHIVED") {
+      throw new AppError(
+        ERROR_CODES.CONFLICT,
+        "Konten Archived tidak dapat diperbarui melalui aksi ini.",
+      );
+    }
 
-  /**
-   * ARCHIVED tidak membutuhkan pengecekan
-   * duplicate sortOrder karena record archived
-   * tidak dianggap aktif.
-   */
-  if (nextStatus !== "ARCHIVED") {
+    const nextStatus: MembershipStatus =
+      existing.status === "PUBLISHED"
+        ? "PUBLISHED"
+        : input.status;
+
     await validateMembershipSortOrder(
       input.section,
       input.sortOrder,
       nextStatus,
       id,
+      tx as typeof prisma,
     );
-  }
 
-  return prisma.membershipInfo.update({
-    where: {
-      id,
-    },
-
-    data: {
-      section: input.section,
-      title: input.title,
-      content: input.content,
-      mediaId: input.mediaId || null,
-
-      status: nextStatus,
-
-      sortOrder: input.sortOrder,
-
-      updatedById: adminId,
-    },
-
-    include: {
-      media: true,
-    },
+    return tx.membershipInfo.update({
+      where: { id },
+      data: {
+        section: input.section,
+        contentKey: input.contentKey,
+        title: input.title,
+        content: input.content,
+        mediaId: input.mediaId || null,
+        status: nextStatus,
+        sortOrder: input.sortOrder,
+        updatedById: adminId,
+      },
+      include: {
+        media: true,
+      },
+    });
   });
 }
 
 /**
  * ARCHIVE
- *
- * Mengarsipkan konten tanpa menghapus record.
+ * Perubahan form disimpan bersamaan dengan pengarsipan.
  */
 export async function archiveMembershipInfo(
   id: string,
+  input?: MembershipSaveInput,
 ): Promise<
-  ActionResult<
-    Awaited<ReturnType<typeof archiveMembershipQuery>>
-  >
+  ActionResult<Awaited<ReturnType<typeof archiveMembershipQuery>>>
 > {
   try {
     const admin = await requireAdmin();
@@ -413,12 +420,17 @@ export async function archiveMembershipInfo(
       );
     }
 
+    const validated = input
+      ? membershipCreateSchema.parse(normalizeInput(input))
+      : undefined;
+
     const content = await archiveMembershipQuery(
       id,
       admin.id,
+      validated,
     );
 
-    revalidatePath("/admin/membership");
+    revalidateMembershipPaths();
 
     return {
       success: true,
@@ -432,52 +444,64 @@ export async function archiveMembershipInfo(
 async function archiveMembershipQuery(
   id: string,
   adminId: string,
+  input?: MembershipCreateInput,
 ) {
-  const existingContent =
-    await prisma.membershipInfo.findUnique({
-      where: {
-        id,
-      },
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.membershipInfo.findUnique({
+      where: { id },
     });
 
-  if (!existingContent) {
-    throw new AppError(
-      ERROR_CODES.NOT_FOUND,
-      "Membership Info tidak ditemukan.",
-    );
-  }
+    if (!existing) {
+      throw new AppError(
+        ERROR_CODES.NOT_FOUND,
+        "Membership Info tidak ditemukan.",
+      );
+    }
 
-  return prisma.membershipInfo.update({
-    where: {
-      id,
-    },
+    if (existing.status === "ARCHIVED") {
+      throw new AppError(
+        ERROR_CODES.CONFLICT,
+        "Konten sudah berstatus Archived.",
+      );
+    }
 
-    data: {
-      status: "ARCHIVED",
-      updatedById: adminId,
-    },
+    const section = input?.section ?? existing.section;
+    const sortOrder = input?.sortOrder ?? existing.sortOrder;
 
-    include: {
-      media: true,
-    },
+    // Urutan Archived dipilih otomatis agar tidak konflik.
+    const archivedSortOrder =
+      await getNextArchivedSortOrder(tx, section);
+
+    return tx.membershipInfo.update({
+      where: { id },
+      data: {
+        section,
+        contentKey: input?.contentKey ?? existing.contentKey,
+        title: input?.title ?? existing.title,
+        content: input?.content ?? existing.content,
+        mediaId: input ? input.mediaId || null : existing.mediaId,
+        status: "ARCHIVED",
+        sortOrder: archivedSortOrder,
+        updatedById: adminId,
+      },
+      include: {
+        media: true,
+      },
+    });
   });
 }
 
 /**
  * PUBLISH
- *
- * Menerbitkan satu MembershipInfo.
- *
- * Jika sudah ada PUBLISHED pada section yang
- * sama, konten tersebut diubah menjadi ARCHIVED
- * dalam transaction yang sama.
+ * Perubahan form disimpan bersamaan dengan publikasi.
+ * Versi Published sebelumnya dengan section + contentKey
+ * yang sama diarsipkan terlebih dahulu.
  */
 export async function publishMembershipInfo(
   id: string,
+  input?: MembershipSaveInput,
 ): Promise<
-  ActionResult<
-    Awaited<ReturnType<typeof publishMembershipQuery>>
-  >
+  ActionResult<Awaited<ReturnType<typeof publishMembershipQuery>>>
 > {
   try {
     const admin = await requireAdmin();
@@ -489,12 +513,17 @@ export async function publishMembershipInfo(
       );
     }
 
+    const validated = input
+      ? membershipCreateSchema.parse(normalizeInput(input))
+      : undefined;
+
     const content = await publishMembershipQuery(
       id,
       admin.id,
+      validated,
     );
 
-    revalidatePath("/admin/membership");
+    revalidateMembershipPaths();
 
     return {
       success: true,
@@ -508,73 +537,109 @@ export async function publishMembershipInfo(
 async function publishMembershipQuery(
   id: string,
   adminId: string,
+  input?: MembershipCreateInput,
 ) {
   return prisma.$transaction(async (tx) => {
-    const target =
-      await tx.membershipInfo.findUnique({
-        where: {
-          id,
-        },
-      });
+    const existing = await tx.membershipInfo.findUnique({
+      where: { id },
+    });
 
-    if (!target) {
+    if (!existing) {
       throw new AppError(
         ERROR_CODES.NOT_FOUND,
         "Membership Info tidak ditemukan.",
       );
     }
 
-    /**
-     * Target harus berasal dari DRAFT.
-     *
-     * Published tidak perlu dipublish ulang.
-     */
-    if (target.status !== "DRAFT") {
+    if (existing.status !== "DRAFT") {
       throw new AppError(
         ERROR_CODES.CONFLICT,
         "Hanya konten Draft yang dapat diterbitkan.",
       );
     }
 
-    /**
-     * Archive PUBLISHED lama pada section
-     * yang sama.
-     */
-    await tx.membershipInfo.updateMany({
+    // Simpan perubahan form ke data sementara transaksi.
+    const target = input
+      ? await tx.membershipInfo.update({
+          where: { id },
+          data: {
+            section: input.section,
+            contentKey: input.contentKey,
+            title: input.title,
+            content: input.content,
+            mediaId: input.mediaId || null,
+            sortOrder: input.sortOrder,
+            updatedById: adminId,
+          },
+        })
+      : existing;
+
+    // Tolak jika urutan Published dipakai kartu lain.
+    const conflict = await tx.membershipInfo.findFirst({
       where: {
         section: target.section,
         status: "PUBLISHED",
-        id: {
-          not: id,
+        sortOrder: target.sortOrder,
+        contentKey: {
+          not: target.contentKey,
         },
       },
-
-      data: {
-        status: "ARCHIVED",
-        updatedById: adminId,
+      select: {
+        title: true,
       },
     });
 
-    /**
-     * Target menjadi PUBLISHED.
-     *
-     * Partial unique index pada database tetap
-     * menjadi safety net untuk aturan satu
-     * PUBLISHED per section.
-     */
-    return tx.membershipInfo.update({
-      where: {
-        id,
-      },
+    if (conflict) {
+      throw new AppError(
+        ERROR_CODES.CONFLICT,
+        `Urutan ${target.sortOrder} sudah digunakan oleh konten Published "${conflict.title}" pada section ${target.section}.`,
+      );
+    }
 
+    // Cari versi Published terdahulu untuk kartu yang sama.
+    const previousPublished =
+      await tx.membershipInfo.findMany({
+        where: {
+          section: target.section,
+          contentKey: target.contentKey,
+          status: "PUBLISHED",
+          id: { not: id },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+    // Arsipkan versi lama dengan urutan Archived yang tersedia.
+    for (const previous of previousPublished) {
+      const archivedSortOrder =
+        await getNextArchivedSortOrder(tx, previous.section);
+
+      await tx.membershipInfo.update({
+        where: { id: previous.id },
+        data: {
+          status: "ARCHIVED",
+          sortOrder: archivedSortOrder,
+          updatedById: adminId,
+        },
+      });
+    }
+
+    // Publikasikan konten yang sudah diperbarui.
+    return tx.membershipInfo.update({
+      where: { id },
       data: {
         status: "PUBLISHED",
         updatedById: adminId,
       },
-
       include: {
         media: true,
       },
     });
   });
+}
+
+function revalidateMembershipPaths() {
+  revalidatePath("/admin/membership");
+  revalidatePath("/keanggotaan");
 }

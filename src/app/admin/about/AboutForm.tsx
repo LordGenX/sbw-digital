@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -100,6 +99,7 @@ function FormSection({
         <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-orange-100 text-orange-700">
           {icon}
         </div>
+
         <div>
           <h3 className="font-bold text-gray-900">{title}</h3>
           <p className="mt-1 text-sm leading-5 text-gray-500">
@@ -125,6 +125,10 @@ export default function AboutForm({
   const [messageType, setMessageType] = useState<
     "success" | "error"
   >("error");
+
+  // Pesan konflik ditampilkan tepat di atas tombol aksi.
+  const [conflictMessage, setConflictMessage] = useState("");
+
   const [mediaId, setMediaId] = useState(content?.mediaId ?? "");
 
   const isCreateMode = !content;
@@ -139,14 +143,34 @@ export default function AboutForm({
     setMessage(text);
   }
 
+  function clearFeedback() {
+    setMessage("");
+    setConflictMessage("");
+  }
+
+  function handleActionError(
+    code: string,
+    errorMessage: string,
+  ) {
+    if (code === "CONFLICT") {
+      setMessage("");
+      setConflictMessage(errorMessage);
+      return;
+    }
+
+    setConflictMessage("");
+    showError(`${code}: ${errorMessage}`);
+  }
+
   async function handleSubmit(
     event: React.FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
 
     const form = event.currentTarget;
+
     setIsPending(true);
-    setMessage("");
+    clearFeedback();
 
     const formData = new FormData(form);
 
@@ -173,8 +197,9 @@ export default function AboutForm({
         });
 
         if (!result.success) {
-          showError(
-            `${result.error.code}: ${result.error.message}`,
+          handleActionError(
+            result.error.code,
+            result.error.message,
           );
           return;
         }
@@ -196,7 +221,7 @@ export default function AboutForm({
         mediaId: selectedMediaId,
         status:
           content.status === "PUBLISHED"
-            ? "DRAFT" as const
+            ? ("DRAFT" as const)
             : statusFromForm,
         sortOrder,
       };
@@ -204,8 +229,9 @@ export default function AboutForm({
       const result = await updateAboutContent(content.id, input);
 
       if (!result.success) {
-        showError(
-          `${result.error.code}: ${result.error.message}`,
+        handleActionError(
+          result.error.code,
+          result.error.message,
         );
         return;
       }
@@ -220,10 +246,19 @@ export default function AboutForm({
     }
   }
 
-  async function handlePublish() {
+  async function handlePublish(
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) {
     if (!content || content.status !== "DRAFT" || isPending) {
       return;
     }
+
+    // Ambil nilai urutan terbaru sebelum konfirmasi.
+    const form = event.currentTarget.form;
+    const formData = form ? new FormData(form) : null;
+    const sortOrder = Number(
+      formData?.get("sortOrder") ?? content.sortOrder,
+    );
 
     const confirmed = window.confirm(
       "Apakah Anda yakin ingin menerbitkan konten ini?",
@@ -232,14 +267,18 @@ export default function AboutForm({
     if (!confirmed) return;
 
     setIsPending(true);
-    setMessage("");
+    clearFeedback();
 
     try {
-      const result = await publishAboutContent(content.id);
+      const result = await publishAboutContent(
+        content.id,
+        sortOrder,
+      );
 
       if (!result.success) {
-        showError(
-          `${result.error.code}: ${result.error.message}`,
+        handleActionError(
+          result.error.code,
+          result.error.message,
         );
         return;
       }
@@ -266,14 +305,15 @@ export default function AboutForm({
     if (!confirmed) return;
 
     setIsPending(true);
-    setMessage("");
+    clearFeedback();
 
     try {
       const result = await archiveAboutContent(content.id);
 
       if (!result.success) {
-        showError(
-          `${result.error.code}: ${result.error.message}`,
+        handleActionError(
+          result.error.code,
+          result.error.message,
         );
         return;
       }
@@ -326,7 +366,7 @@ export default function AboutForm({
         </div>
       </div>
 
-      {/* Feedback */}
+      {/* Feedback umum: sukses dan error selain konflik */}
       {message && (
         <div
           role={messageType === "error" ? "alert" : "status"}
@@ -337,10 +377,14 @@ export default function AboutForm({
           }`}
         >
           {messageType === "success" ? (
-            <CheckCircle2 size={19} className="mt-0.5 shrink-0" />
+            <CheckCircle2
+              size={19}
+              className="mt-0.5 shrink-0"
+            />
           ) : (
             <X size={19} className="mt-0.5 shrink-0" />
           )}
+
           <p className="leading-6">{message}</p>
         </div>
       )}
@@ -388,6 +432,7 @@ export default function AboutForm({
             placeholder="Masukkan judul konten"
             className={inputClassName}
           />
+
           <p className="mt-1.5 text-xs text-gray-500">
             Maksimal 200 karakter.
           </p>
@@ -423,6 +468,7 @@ export default function AboutForm({
             selectedMedia={content?.media ?? null}
             onChange={(selectedMediaId) => {
               setMediaId(selectedMediaId ?? "");
+              setConflictMessage("");
             }}
           />
 
@@ -445,6 +491,7 @@ export default function AboutForm({
               size={17}
               className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
             />
+
             <input
               id="sortOrder"
               name="sortOrder"
@@ -452,9 +499,11 @@ export default function AboutForm({
               min={0}
               defaultValue={content?.sortOrder ?? 0}
               disabled={isPending}
+              onChange={() => setConflictMessage("")}
               className={`${inputClassName} pl-10`}
             />
           </div>
+
           <p className="mt-1.5 text-xs text-gray-500">
             Angka yang lebih kecil menunjukkan urutan lebih awal.
           </p>
@@ -483,6 +532,7 @@ export default function AboutForm({
                   readOnly
                   className={inputClassName}
                 />
+
                 <p className="mt-2 text-xs leading-5 text-gray-500">
                   Konten ini sedang dipublikasikan. Untuk mengubahnya
                   menjadi Draft, gunakan alur pengelolaan status yang
@@ -506,65 +556,94 @@ export default function AboutForm({
       )}
 
       {/* Aksi */}
-      <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-5">
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="submit"
-            disabled={isPending}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+      <div className="space-y-3">
+        {/* Pesan konflik tepat di atas tombol */}
+        {conflictMessage && (
+          <div
+            role="alert"
+            aria-live="assertive"
+            className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
           >
-            {isPending ? (
-              <LoaderCircle size={17} className="animate-spin" />
-            ) : (
-              <Save size={17} />
-            )}
-            {isPending
-              ? "Memproses..."
-              : isCreateMode
-                ? "Simpan Draft"
-                : "Simpan Perubahan"}
-          </button>
+            <X size={19} className="mt-0.5 shrink-0" />
 
-          {!isCreateMode && content.status === "DRAFT" && (
+            <div>
+              <p className="font-semibold">
+                Terjadi konflik
+              </p>
+              <p className="mt-1 leading-5">
+                {conflictMessage}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:p-5">
+          <div className="flex flex-wrap gap-2">
             <button
-              type="button"
-              onClick={handlePublish}
+              type="submit"
               disabled={isPending}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-700 transition hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isPending ? (
-                <LoaderCircle size={17} className="animate-spin" />
+                <LoaderCircle
+                  size={17}
+                  className="animate-spin"
+                />
               ) : (
-                <CheckCircle2 size={17} />
+                <Save size={17} />
               )}
-              Publish
-            </button>
-          )}
 
-          {!isCreateMode && content.status !== "ARCHIVED" && (
+              {isPending
+                ? "Memproses..."
+                : isCreateMode
+                  ? "Simpan Draft"
+                  : "Simpan Perubahan"}
+            </button>
+
+            {!isCreateMode && content.status === "DRAFT" && (
+              <button
+                type="button"
+                onClick={handlePublish}
+                disabled={isPending}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-700 transition hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isPending ? (
+                  <LoaderCircle
+                    size={17}
+                    className="animate-spin"
+                  />
+                ) : (
+                  <CheckCircle2 size={17} />
+                )}
+                Publish
+              </button>
+            )}
+
+            {!isCreateMode && content.status !== "ARCHIVED" && (
+              <button
+                type="button"
+                onClick={handleArchive}
+                disabled={isPending}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Archive size={17} />
+                Archive
+              </button>
+            )}
+          </div>
+
+          {onCancel && (
             <button
               type="button"
-              onClick={handleArchive}
+              onClick={onCancel}
               disabled={isPending}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Archive size={17} />
-              Archive
+              <X size={17} />
+              Batal
             </button>
           )}
         </div>
-
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isPending}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <X size={17} />
-            Batal
-          </button>
-        )}
       </div>
     </form>
   );

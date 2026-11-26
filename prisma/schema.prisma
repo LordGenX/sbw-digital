@@ -164,6 +164,7 @@ model Service {
 model MembershipInfo {
   id        String            @id @default(uuid()) @db.Uuid
   section   MembershipSection
+  contentKey String           @default("DEFAULT") @db.VarChar(100)
   title     String            @db.VarChar(200)
   content   String            @db.Text
   mediaId   String?           @db.Uuid
@@ -180,7 +181,7 @@ model MembershipInfo {
   createdBy Admin  @relation("MembershipCreatedBy", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Cascade)
   updatedBy Admin  @relation("MembershipUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
-  @@index([section, status, sortOrder])
+  @@unique([section, status, sortOrder])
 }
 
 // ===================== NEWS =====================
